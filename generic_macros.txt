@@ -1,0 +1,35 @@
+Double_t points[90];
+Double_t errors[90];
+counter =0;
+for ( int D = 2; D<=6; D+=1) {
+for (double F = 0.2; F<=0.6; F+=0.1){
+TH1D * time_spectrum = getTimeSpectrum(ch0, ch1, 2, 0.2, 230, 20, 2e4); time_spectrum->SetAxisRange(12, 14, "X"); Double_t mean = time_spectrum->GetMean(); Double_t std = time_spectrum->GetStdDev();
+time_spectrum->Fit("gaus with linear bkg","","",mean - 2*std, mean + 2*std);
+TF1 *g = (TF1*)time_spectrum->GetListOfFunctions()->FindObject("gaus with linear bkg");
+errors[counter] = g->GetParError(2);
+points[counter] = g->GetParameter(2);
+counter++;
+}}
+
+
+TCanvas *c1=new TCanvas("c1","multipads",900,700);
+c1->Divide(2,3);
+
+
+Double_t points[5];
+Double_t errors[5];
+for ( int l_threshold = 0; l_threshold <= 4; l_threshold++ ) {
+c1->cd(l_threshold+1);
+TH1D * time_spectrum = getTimeSpectrum(ch0, ch1, 3, 0.2, 230, 20, 2e4, 100 + 50*l_threshold); 
+time_spectrum->SetAxisRange(12, 14, "X"); 
+double mean = time_spectrum->GetMean(); 
+double stdev = time_spectrum->GetStdDev();
+time_spectrum->Fit("gaus with linear bkg","","",mean - 2.5*stdev, mean + 2.5*stdev);
+TF1 *g = (TF1*)time_spectrum->GetListOfFunctions()->FindObject("gaus with linear bkg");
+errors[l_threshold] = g->GetParError(2);
+points[l_threshold] = g->GetParameter(2);
+time_spectrum->Draw();
+c1->Update();
+}
+
+

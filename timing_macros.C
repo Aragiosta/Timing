@@ -147,8 +147,9 @@ TH1D* createSpectrum(TBranch* inbranch, int numBins = 1e3, double minX = 1, doub
 
 /////////////////////////////////////////////////////////////////////////////////////
 //			ADDED PARTS AS OF 1/11,	~GIOELE
+//			EDITED ON 4/11
 
-TH1D* getTimeSpectrum(TBranch* ch0, TBranch* ch1, int D, float F, int nSamples=230, int initial_offset = 20, int numBins = 200)	{
+TH1D* getTimeSpectrum(TBranch* ch0, TBranch* ch1, int D, float F, int nSamples=230, int initial_offset = 20, int numBins = 200, double l_thresh_energy=-1)	{
 	TH1D * timeSpectrum = new TH1D("digitizer_t_spec", "Time spectrum from Digitizer", numBins, 1, 0);
 
 	for ( int event = 0; event < ch0 -> GetEntries(); event++ ) {
@@ -161,6 +162,68 @@ TH1D* getTimeSpectrum(TBranch* ch0, TBranch* ch1, int D, float F, int nSamples=2
 		ch0 -> GetEvent(event);
 		ch1 -> SetAddress(&indata_ch1.timetag);
 		ch1 -> GetEvent(event);
+
+
+		if (l_thresh_energy >= 0){
+			//	------------------ PART 0.5: ENERGY THRESHOLD ------------------
+			//convert from energy to channels
+			Double_t slope_D1 = 0.08148;
+			Double_t bias_D1 = -14.57;
+
+			Double_t slope_D2 = 0.08042;
+			Double_t bias_D2 = -28.52;
+
+			Double_t l_thresh_ch0 = (l_thresh_energy - bias_D1) / slope_D1;
+			Double_t l_thresh_ch1 = (l_thresh_energy - bias_D2) / slope_D2;
+
+
+			//integration via a trapezoid, uniformely-discrete grid approximation
+			double integral_ch0 = 0;
+			double integral_ch1 = 0;
+
+
+
+
+			//		------------------ PART 1: ZERO CROSSING POINT ------------------
+			//basic idea, first 50 bins of waveform are just noise around the baseline, take that and average out the noise
+			double baseline_ch0 = 0;
+			double baseline_ch1 = 0;
+			for (int i = initial_offset; i < 50 ; i++) {
+				baseline_ch0 += indata_ch0.samples[i];
+				baseline_ch1 += indata_ch1.samples[i];
+			}
+			baseline_ch0 /= 50.0 - initial_offset;
+			baseline_ch1 /= 50.0 - initial_offset;
+
+			// for (int i = 0; i< nSamples; i++) {
+			// 	indata_ch0.samples[i] -= baseline_ch0;
+			// 	indata_ch1.samples[i] -= baseline_ch1;
+			// }
+
+
+			// cycle over quantized samples of waveform and add area of infinitesimal trapezoid
+			for(int i = 0; i < nSamples - 1; i++){
+				//UShort_t f1,f2;
+				//UShort_t dx = 1;    //grid spacing, CHECK IF RIGHT VALUE (1 channel)
+				
+				double f1_ch0,f2_ch0;
+				double f1_ch1,f2_ch1;
+				double dx = 1.0;
+
+				// access quantized values
+				f1_ch0 = indata_ch0.samples[i];
+				f2_ch0 = indata_ch0.samples[i+1];
+				f1_ch1 = indata_ch1.samples[i];
+				f2_ch1 = indata_ch1.samples[i+1];
+
+				// calculate integral via trapezoid approx.
+				integral_ch0 += (f1_ch0 + f2_ch0) * dx / 2.0 - baseline_ch0 * dx;
+				integral_ch1 += (f1_ch1 + f2_ch1) * dx / 2.0 - baseline_ch1 * dx;
+			}
+			if( -integral_ch0 < l_thresh_ch0 || -integral_ch1 < l_thresh_ch1) continue;	//integral is negative due to electr. charge
+		}
+
+
 
 		//storage for the two channels' binomuials
 		// TH1D * wave_ch0 = new TH1D("waveform_ch0", "waveform for ch0", nSamples, 1, 0); //putting xmin > xmax lets root choose the optimal range
@@ -192,7 +255,7 @@ TH1D* getTimeSpectrum(TBranch* ch0, TBranch* ch1, int D, float F, int nSamples=2
 		}
 
 		/////////////////////////////////////////////////////////////////
-		//debugging: show plot of binomial signal
+		// debugging: show plot of binomial signal
 		// TGraph * draw_binomial_ch0 = new TGraph();
 		// TGraph * draw_binomial_ch1 = new TGraph();
 
@@ -235,3 +298,13 @@ TH1D* getTimeSpectrum(TBranch* ch0, TBranch* ch1, int D, float F, int nSamples=2
 	
 	return timeSpectrum;
 }
+
+void setupGausnWLinBKG(){
+	// fitting function
+	auto gausWithLin = new TF1("gaus with linear bkg","gaus(0) + pol1(3)");
+	gausWithLin->SetParLimits(0, 150, 15e3);
+	gausWithLin->SetParLimits(1, 12, 14);
+	gausWithLin->SetParLimits(2, 0.05, 2);
+	gausWithLin->SetParLimits(3, 0, 1e3);
+}
+
