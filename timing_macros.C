@@ -97,9 +97,8 @@ TBranch * getBranchFromTree(const char *name_file, const char *name_tree, const 
 	return inbranch;
 }
 
-
 //if in doubt on what params use, leave default
-TH1D* createSpectrum(TBranch* inbranch, int numBins = 1e3, double minX = 1, double maxX = -1, int nSamples = 250) {
+TH1D* createSpectrum(TBranch* inbranch, bool ch1, int numBins = 1e3, double minX = 1, double maxX = -1, int nSamples = 250) {
 	// variables
 	slimport_data_t indata;
 	//TFile *infile = new TFile(name_file);
@@ -117,6 +116,11 @@ TH1D* createSpectrum(TBranch* inbranch, int numBins = 1e3, double minX = 1, doub
         //integration via a trapezoid, uniformely-discrete grid approximation
         double integral = 0;
 
+		double baseline=0;
+			for (int j = 20; j < 50 ; j++)
+				baseline += indata.samples[j];
+			baseline /= 30.0;
+
         // cycle over quantized samples of waveform and add area of infinitesimal trapezoid
         for(int i = 0; i < nSamples - 1; i++){
             //UShort_t f1,f2;
@@ -130,8 +134,30 @@ TH1D* createSpectrum(TBranch* inbranch, int numBins = 1e3, double minX = 1, doub
             f2 = indata.samples[i+1];
 
             // calculate integral via trapezoid approx.
-            integral += (f1 + f2) * dx / 2.0;
+            integral += baseline - (f1 + f2) * dx / 2.0;
         }
+
+		//convert from channels to energy
+			// Double_t slope_D1 = 0.08148;
+			// Double_t bias_D1 = -14.57;
+
+			// Double_t slope_D2 = 0.08042;
+			// Double_t bias_D2 = -28.52;
+
+			
+			Double_t slope_D1 = 0.08148;
+			Double_t bias_D1 = -14.57;
+
+			Double_t slope_D2 = 0.0798906;
+			Double_t bias_D2 = -3.00144e1;
+			
+			if(ch1){
+				integral = integral * slope_D1 - bias_D1;
+			}else{
+				integral = integral * slope_D2 - bias_D2;
+			}
+			
+
 
         // check thresholds and populate histogram
         //if (integral >= lowThr && integral <= highThr){
@@ -166,12 +192,13 @@ TH1D* getTimeSpectrum(TBranch* ch0, TBranch* ch1, int D, float F, int nSamples=2
 
 		if (l_thresh_energy >= 0){
 			//	------------------ PART 0.5: ENERGY THRESHOLD ------------------
-			//convert from energy to channels
+			//convert from energy to channels			
 			Double_t slope_D1 = 0.08148;
 			Double_t bias_D1 = -14.57;
 
 			Double_t slope_D2 = 0.08042;
 			Double_t bias_D2 = -28.52;
+
 
 			Double_t l_thresh_ch0 = (l_thresh_energy - bias_D1) / slope_D1;
 			Double_t l_thresh_ch1 = (l_thresh_energy - bias_D2) / slope_D2;
@@ -217,10 +244,10 @@ TH1D* getTimeSpectrum(TBranch* ch0, TBranch* ch1, int D, float F, int nSamples=2
 				f2_ch1 = indata_ch1.samples[i+1];
 
 				// calculate integral via trapezoid approx.
-				integral_ch0 += (f1_ch0 + f2_ch0) * dx / 2.0 - baseline_ch0 * dx;
-				integral_ch1 += (f1_ch1 + f2_ch1) * dx / 2.0 - baseline_ch1 * dx;
+				integral_ch0 += baseline_ch0 * dx - (f1_ch0 + f2_ch0) * dx / 2.0;
+				integral_ch1 += baseline_ch1 * dx - (f1_ch1 + f2_ch1) * dx / 2.0;
 			}
-			if( -integral_ch0 < l_thresh_ch0 || -integral_ch1 < l_thresh_ch1) continue;	//integral is negative due to electr. charge
+			if( integral_ch0 < l_thresh_ch0 || integral_ch1 < l_thresh_ch1) continue;	//integral is negative due to electr. charge
 		}
 
 
@@ -299,10 +326,11 @@ TH1D* getTimeSpectrum(TBranch* ch0, TBranch* ch1, int D, float F, int nSamples=2
 	return timeSpectrum;
 }
 
+
 void setupGausnWLinBKG(){
 	// fitting function
 	auto gausWithLin = new TF1("gaus with linear bkg","gaus(0) + pol1(3)");
-	gausWithLin->SetParLimits(0, 150, 15e3);
+	gausWithLin->SetParLimits(0, 150, 30e3);
 	gausWithLin->SetParLimits(1, 12, 14);
 	gausWithLin->SetParLimits(2, 0.05, 2);
 	gausWithLin->SetParLimits(3, 0, 1e3);

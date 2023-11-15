@@ -1,27 +1,40 @@
-Double_t points[90];
-Double_t errors[90];
-counter =0;
-for ( int D = 2; D<=6; D+=1) {
-for (double F = 0.2; F<=0.6; F+=0.1){
-TH1D * time_spectrum = getTimeSpectrum(ch0, ch1, 2, 0.2, 230, 20, 2e4); time_spectrum->SetAxisRange(12, 14, "X"); Double_t mean = time_spectrum->GetMean(); Double_t std = time_spectrum->GetStdDev();
-time_spectrum->Fit("gaus with linear bkg","","",mean - 2*std, mean + 2*std);
+Double_t points[9][8];
+Double_t errors[9][8];
+for ( int D = 2; D<=10; D+=1) {
+for (int j = 2; j<=9; j+=1){
+double F=j/10.0;
+TH1D * time_spectrum = getTimeSpectrum(ch0, ch1, D, F, 230, 20, 2e4); 
+time_spectrum->SetAxisRange(12, 14, "X"); 
+Double_t mean = time_spectrum->GetMean(); 
+Double_t stdev = time_spectrum->GetStdDev();
+time_spectrum->Fit("gaus with linear bkg","","",mean - 2*stdev, mean + 2*stdev);
 TF1 *g = (TF1*)time_spectrum->GetListOfFunctions()->FindObject("gaus with linear bkg");
-errors[counter] = g->GetParError(2);
-points[counter] = g->GetParameter(2);
-counter++;
+errors[D-2][j-2] = g->GetParError(2);
+points[D-2][j-2] = g->GetParameter(2);
 }}
 
 
 TCanvas *c1=new TCanvas("c1","multipads",900,700);
 c1->Divide(2,3);
 
+for (int i = 0; i<8;i++){
+    res[i] = new TCanvas();
+    res_spectra[i]->SetAxisRange(12,14,"X");
+    Double_t mean = res_spectra[i]->GetMean();
+    Double_t stdev = res_spectra[i]->GetStdDev();
+    res_spectra[i]->Fit("gaus with linear bkg","","",mean - 2*stdev, mean + 2*stdev);
+    res_spectra[i]->Draw();
+}
 
 Double_t points[5];
 Double_t errors[5];
 for ( int l_threshold = 0; l_threshold <= 4; l_threshold++ ) {
 c1->cd(l_threshold+1);
-TH1D * time_spectrum = getTimeSpectrum(ch0, ch1, 3, 0.2, 230, 20, 2e4, 100 + 50*l_threshold); 
+TH1D * time_spectrum = getTimeSpectrum(ch0, ch1, 5, 0.2, 230, 20, 2e4, 100 + 50*l_threshold); 
+time_spectrum->SetTitle(Form("Time spectrum, energy thr. = %dkeV",100+50*l_threshold));
 time_spectrum->SetAxisRange(12, 14, "X"); 
+time_spectrum->GetXaxis()->SetTitle("Time difference [ns]");
+time_spectrum->GetYaxis()->SetTitle("Counts");
 double mean = time_spectrum->GetMean(); 
 double stdev = time_spectrum->GetStdDev();
 time_spectrum->Fit("gaus with linear bkg","","",mean - 2.5*stdev, mean + 2.5*stdev);
@@ -31,5 +44,3 @@ points[l_threshold] = g->GetParameter(2);
 time_spectrum->Draw();
 c1->Update();
 }
-
-
